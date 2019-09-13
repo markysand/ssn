@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 // SSN is a representation of a 12 digit swedish social security number
 type SSN [12]int
 
@@ -86,24 +90,24 @@ func (n *SSN) SetLastDigits(s string) {
 	ss := []rune(safeString(s, "****"))
 	if (ss[0] == 's') || (ss[1] == 's') {
 		n[8] = 9
-		n[9] = rand.Intn(1) + 8
+		n[9] = rand.Intn(2) + 8
 	} else {
+		if ss[0] == '?' {
+			n[8] = rand.Intn(10)
+		}
 		if ss[1] == '?' {
-			n[8] = rand.Intn(9)
-		}
-		if ss[2] == '?' {
-			n[9] = rand.Intn(9)
+			n[9] = rand.Intn(10)
 		}
 	}
-	switch ss[3] {
+	switch ss[2] {
 	case '?':
-		n[10] = rand.Intn(9)
+		n[10] = rand.Intn(10)
 	case 'f':
-		n[10] = rand.Intn(4) * 2
+		n[10] = rand.Intn(5) * 2
 	case 'm':
-		n[10] = rand.Intn(4)*2 + 1
+		n[10] = rand.Intn(5)*2 + 1
 	}
-	if ss[4] == 'c' {
+	if ss[3] == 'c' {
 		n[11] = GetChecksum(*n)
 	}
 }
