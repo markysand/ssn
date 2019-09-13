@@ -169,3 +169,71 @@ func TestNewSSNFromString(t *testing.T) {
 		})
 	}
 }
+
+func TestSetLastDigits(t *testing.T) {
+	baseSSN := SSN{1, 9, 7, 5, 0, 9, 2, 2}
+	tests := map[string]struct {
+		input string
+		test  func(n SSN) bool
+	}{
+		"Safe": {
+			"ss?c",
+			func(n SSN) bool {
+				if n[8] != 9 {
+					return false
+				}
+				switch n[9] {
+				case 9, 8:
+				default:
+					return false
+				}
+				return true
+			},
+		},
+		"Random": {
+			"????",
+			func(n SSN) bool {
+				if n != baseSSN {
+					return true
+				}
+				return false
+			},
+		},
+		"Female": {
+			"**f*",
+			func(n SSN) bool {
+				if n[10]%2 == 0 {
+					return true
+				}
+				return false
+			},
+		},
+		"Male": {
+			"**m*",
+			func(n SSN) bool {
+				if n[10]%2 == 1 {
+					return true
+				}
+				return false
+			},
+		},
+		"Checksum": {
+			"***c",
+			func(n SSN) bool {
+				if n[11] == GetChecksum(n) {
+					return true
+				}
+				return false
+			},
+		},
+	}
+	for label, tc := range tests {
+		t.Run(label, func(t *testing.T) {
+			n := baseSSN
+			n.SetLastDigits(tc.input)
+			if !tc.test(n) {
+				t.Error("Failed", n)
+			}
+		})
+	}
+}
