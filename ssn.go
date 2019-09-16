@@ -158,3 +158,19 @@ func GetChecksum(n SSN) int {
 	result := (10 - sum%10) % 10
 	return result
 }
+
+/* experimental
+FROMTOTO-XXXX
+example
+00061200-???c
+
+Proposed functions:
+- Check SSN
+ get age, gender, safe or not
+
+- fill empty ssn
+ with date, gender, checksum
+
+- fill with random, date, gender, lastdigits
+
+*/

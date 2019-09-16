@@ -170,6 +170,15 @@ func TestNewSSNFromString(t *testing.T) {
 	}
 }
 
+func BenchmarkSSN(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		from, to := time.Hour*24*365*80, time.Hour*24*365*18
+		var ssn SSN
+		ssn.SetDate(GetRandomTime(from, to))
+		ssn.SetLastDigits("ss?c")
+	}
+}
+
 func TestSetLastDigits(t *testing.T) {
 	baseSSN := SSN{1, 9, 7, 5, 0, 9, 2, 2}
 	tests := map[string]struct {
