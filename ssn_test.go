@@ -2,6 +2,7 @@ package ssn
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -142,7 +143,7 @@ func TestNewSSNFromString(t *testing.T) {
 		},
 		"Incorrect checksum": {
 			"20090301-6684",
-			nil,
+			&SSN{2, 0, 0, 9, 0, 3, 0, 1, 6, 6, 8, 4},
 			ErrChecksum,
 		},
 		"Correct SSN": {
@@ -180,7 +181,7 @@ func BenchmarkSSN(b *testing.B) {
 }
 
 func TestSetLastDigits(t *testing.T) {
-	baseSSN := SSN{1, 9, 7, 5, 0, 9, 2, 2}
+	baseSSN := SSN{1, 9, 7, 5, 0, 9, 2, 2, 1, 2, 3, 4}
 	tests := map[string]struct {
 		input string
 		test  func(n SSN) bool
@@ -235,6 +236,20 @@ func TestSetLastDigits(t *testing.T) {
 				return false
 			},
 		},
+		"Selective preservation": {
+			"5*5*",
+			func(n SSN) bool {
+				s := n.String()
+				return strings.HasSuffix(s, "5254")
+			},
+		},
+		"Selective preservation 2": {
+			"*5*5",
+			func(n SSN) bool {
+				s := n.String()
+				return strings.HasSuffix(s, "1535")
+			},
+		},
 	}
 	for label, tc := range tests {
 		t.Run(label, func(t *testing.T) {
@@ -242,6 +257,105 @@ func TestSetLastDigits(t *testing.T) {
 			n.SetLastDigits(tc.input)
 			if !tc.test(n) {
 				t.Error("Failed", n)
+			}
+		})
+	}
+}
+
+func TestDate(t *testing.T) {
+	tt := []struct {
+		ssn   string
+		year  int
+		month time.Month
+		day   int
+	}{
+		{
+			"19530105-9894",
+			1953,
+			time.Month(1),
+			5,
+		},
+		{
+			"19970712-9855",
+			1997,
+			time.Month(7),
+			12,
+		},
+	}
+	for _, tc := range tt {
+		ssn, err := NewSSNFromString(tc.ssn)
+		if err != nil {
+			t.Error("Could not parse SSN from string")
+			t.FailNow()
+		}
+		y, m, d := ssn.Date()
+		if y != tc.year {
+			t.Error("Wrong year:", y, "want", tc.year)
+		}
+		if m != tc.month {
+			t.Error("Wrong month:", m, "want", tc.month)
+		}
+		if d != tc.day {
+			t.Error("Wrong day:", d, "want", tc.day)
+		}
+	}
+}
+
+func assert(got, want interface{}, t *testing.T) {
+	if got != want {
+		t.Errorf("Got %v, Want %v", got, want)
+	}
+}
+
+func TestAge(t *testing.T) {
+	referenceTime, _ := time.Parse("20060102", "20000101")
+	const hoursPerYear = 24 * 365.25
+	tt := []struct {
+		ssn      string
+		ageYears int
+	}{{
+		"19720508-9894",
+		27,
+	}, {
+		"19370704-9858",
+		62,
+	}, {
+		"19811115-9870",
+		18,
+	}, {
+		"19490801-9815",
+		50,
+	}}
+	for testNo, tc := range tt {
+		t.Run(fmt.Sprintf("Running testage no %v", testNo), func(t *testing.T) {
+			ssn, _ := NewSSNFromString(tc.ssn)
+			age := int(ssn.Age(referenceTime).Hours() / hoursPerYear)
+			assert(age, tc.ageYears, t)
+		})
+	}
+}
+
+func TestSSN_Female(t *testing.T) {
+	tests := []struct {
+		name string
+		n    string
+		want bool
+	}{
+		{
+			name: "female",
+			n:    "19720525-6600",
+			want: true,
+		}, {
+			name: "male",
+			n:    "19541014-1674",
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ssn, _ := NewSSNFromString(tt.n)
+			if got := ssn.Female(); got != tt.want {
+				t.Errorf("SSN.Female() = %v, want %v", got, tt.want)
 			}
 		})
 	}

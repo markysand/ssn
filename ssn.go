@@ -3,6 +3,7 @@ package ssn
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"regexp"
 	"strconv"
@@ -17,10 +18,14 @@ func init() {
 // SSN is a representation of a 12 digit swedish social security number
 type SSN [12]int
 
-// GetRandomTime gets a random time in the past
+// GetRandomTime gets a random time
+// Durations count backwards from Now
 func GetRandomTime(from, to time.Duration) time.Time {
 	t1 := time.Now()
 	diff := from - to
+	if diff <= 0 {
+		return t1.Add(-from)
+	}
 	randomDiff := time.Duration(rand.Int63n(int64(diff)))
 	t2 := t1.Add(-randomDiff - to)
 	return t2
@@ -40,7 +45,7 @@ func sumDigits(i int) int {
 
 // Error codes for parsing of SSNs
 var (
-	ErrFormat   = errors.New("Input does not match simple regexp guard YYYYMMDD-XXXX")
+	ErrFormat   = errors.New("Input does not match YYYYMMDD-XXXX or YYYYMMDDXXXX")
 	ErrDate     = errors.New("Could not parse date")
 	ErrChecksum = errors.New("Checksum is incorrect")
 )
@@ -48,10 +53,13 @@ var (
 // NewSSNFromString makes a ssn type object from a string and at the same time validates that string
 // to format, date, checksum and will send errors accordingly
 func NewSSNFromString(s string) (*SSN, error) {
-	var re = regexp.MustCompile(`^[0-9]{8}-[0-9]{4}$`)
+	var re = regexp.MustCompile(`^[0-9]{8}-?[0-9]{4}$`)
 	ok := re.MatchString(s)
 	if !ok {
 		return nil, ErrFormat
+	}
+	if len(s) == 12 {
+		s = s[0:8] + "-" + s[8:12]
 	}
 	tm, err := time.Parse("20060102", s[0:8])
 	if err != nil {
@@ -66,7 +74,7 @@ func NewSSNFromString(s string) (*SSN, error) {
 		}
 	}
 	if GetChecksum(ssn) != ssn[11] {
-		return nil, ErrChecksum
+		return &ssn, ErrChecksum
 	}
 	return &ssn, nil
 }
@@ -77,6 +85,18 @@ func safeString(s, def string) string {
 		return s[:l2]
 	}
 	return s + def[l1:l2]
+}
+
+func trySetDigitFromRune(r rune, i *int) {
+	switch r {
+	case '*':
+	case '?':
+		*i = rand.Intn(10)
+	default:
+		if x, err := strconv.Atoi(string(r)); err == nil {
+			*i = x
+		}
+	}
 }
 
 // SetLastDigits will set the last digits (not checksum)
@@ -92,23 +112,24 @@ func (n *SSN) SetLastDigits(s string) {
 		n[8] = 9
 		n[9] = rand.Intn(2) + 8
 	} else {
-		if ss[0] == '?' {
-			n[8] = rand.Intn(10)
-		}
-		if ss[1] == '?' {
-			n[9] = rand.Intn(10)
-		}
+		trySetDigitFromRune(ss[0], &n[8])
+		trySetDigitFromRune(ss[1], &n[9])
 	}
 	switch ss[2] {
-	case '?':
-		n[10] = rand.Intn(10)
 	case 'f':
 		n[10] = rand.Intn(5) * 2
 	case 'm':
 		n[10] = rand.Intn(5)*2 + 1
+	default:
+		trySetDigitFromRune(ss[2], &n[10])
 	}
-	if ss[3] == 'c' {
+	switch ss[3] {
+	case 'c':
+
 		n[11] = GetChecksum(*n)
+	case '*':
+	default:
+		trySetDigitFromRune(ss[3], &n[11])
 	}
 }
 
@@ -159,18 +180,59 @@ func GetChecksum(n SSN) int {
 	return result
 }
 
-/* experimental
-FROMTOTO-XXXX
-example
-00061200-???c
+func newRandomSSN() *SSN {
+	var ssn SSN
+	t := GetRandomTime(time.Hour*24*365*100, 0)
+	ssn.SetDate(t)
+	ssn.SetLastDigits("???c")
+	return &ssn
+}
 
-Proposed functions:
-- Check SSN
- get age, gender, safe or not
+// NewRandomSSN will return a SSN of a 0-100 year old
+func NewRandomSSN() *SSN {
+	ssn := newRandomSSN()
+	ssn.SetLastDigits("???c")
+	return ssn
+}
 
-- fill empty ssn
- with date, gender, checksum
+// NewSafeRandomSSN will return a safe SSN of a 0-100 year old
+func NewSafeRandomSSN() *SSN {
+	ssn := newRandomSSN()
+	ssn.SetLastDigits("ss?c")
+	return ssn
+}
 
-- fill with random, date, gender, lastdigits
+func intSliceToInt(is []int) (sum int) {
+	for i, k := len(is)-1, 1; i >= 0; i, k = i-1, k*10 {
+		sum += k * is[i]
+	}
+	return
+}
 
-*/
+func (n SSN) Date() (year int, month time.Month, day int) {
+	return intSliceToInt(n[0:4]), time.Month(intSliceToInt(n[4:6])), intSliceToInt(n[6:8])
+}
+
+func intSliceToString(is []int) string {
+	var b strings.Builder
+	for _, n := range is {
+		b.WriteString(strconv.Itoa(n))
+	}
+	return b.String()
+}
+
+func (n SSN) Time() time.Time {
+	t, err := time.Parse("20060102", intSliceToString(n[0:8]))
+	if err != nil {
+		panic(fmt.Sprint("SSN format invalid, cannot be parsed to Time", n))
+	}
+	return t
+}
+
+func (n SSN) Age(now time.Time) time.Duration {
+	return now.Sub(n.Time())
+}
+
+func (n SSN) Female() bool {
+	return n[10]%2 == 0
+}
